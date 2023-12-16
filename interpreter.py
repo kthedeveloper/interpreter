@@ -1,5 +1,6 @@
-
-INTEGER, MUL, DIV, EOF = 'INTEGER', 'MUL', 'DIV', 'EOF'
+INTEGER, PLUS, MINUS, MUL, DIV, EOF = (
+    'INTEGER', 'PLUS', 'MINUS', 'MUL', 'DIV', 'EOF'
+)
 
 
 class Token(object):
@@ -19,21 +20,20 @@ class Token(object):
         return self.__str__()
 
 
-class Interpreter(object):
+class Lexer(object):
     def __init__(self, text):
         self.text = text
         self.pos = 0
-        self.current_token = None
         self.current_char = self.text[self.pos]
 
     def error(self):
-        raise Exception('Invalid syntax')
+        raise Exception('Invalid character')
 
     def advance(self):
         """Advance the `pos` pointer and set the `current_char` variable."""
         self.pos += 1
         if self.pos > len(self.text) - 1:
-            self.current_char = None  # Indicates end of input
+            self.current_char = None
         else:
             self.current_char = self.text[self.pos]
 
@@ -42,7 +42,7 @@ class Interpreter(object):
             self.advance()
 
     def integer(self):
-        """Return a (multidigit) integer consumed from the input."""
+        """Return an integer consumed from the input."""
         result = ''
         while self.current_char is not None and self.current_char.isdigit():
             result += self.current_char
@@ -53,7 +53,7 @@ class Interpreter(object):
         """Lexical analyzer
 
         This method is responsible for breaking a sentence
-        apart into tokens.
+        apart into tokens. One token at a time.
         """
         while self.current_char is not None:
 
@@ -63,6 +63,14 @@ class Interpreter(object):
 
             if self.current_char.isdigit():
                 return Token(INTEGER, self.integer())
+
+            if self.current_char == '+':
+                self.advance()
+                return Token(PLUS, '+')
+
+            if self.current_char == '-':
+                self.advance()
+                return Token(MINUS, '-')
 
             if self.current_char == '*':
                 self.advance()
@@ -76,31 +84,55 @@ class Interpreter(object):
 
         return Token(EOF, None)
 
+
+class Interpreter(object):
+    def __init__(self, lexer):
+        self.lexer = lexer
+        self.current_token = self.lexer.get_next_token()
+
+    def error(self):
+        raise Exception('Invalid syntax')
+
     def eat(self, token_type):
         if self.current_token.type == token_type:
-            self.current_token = self.get_next_token()
+            self.current_token = self.lexer.get_next_token()
         else:
             self.error()
 
-    def term(self):
-        """Return an INTEGER token value."""
+    def factor(self):
+        """factor : INTEGER"""
         token = self.current_token
         self.eat(INTEGER)
         return token.value
 
-    def expr(self):
-        """Arithmetic expression parser / interpreter."""
-        self.current_token = self.get_next_token()
+    def term(self):
+        """term : factor ((MUL | DIV) factor)*"""
+        result = self.factor()
 
-        result = self.term()
         while self.current_token.type in (MUL, DIV):
             token = self.current_token
             if token.type == MUL:
                 self.eat(MUL)
-                result = result * self.term()
+                result = result * self.factor()
             elif token.type == DIV:
                 self.eat(DIV)
-                result = result / self.term()
+                result = result / self.factor()
+
+        return result
+
+    def expr(self):
+        """Arithmetic expression parser / interpreter.
+        """
+        result = self.term()
+
+        while self.current_token.type in (PLUS, MINUS):
+            token = self.current_token
+            if token.type == PLUS:
+                self.eat(PLUS)
+                result = result + self.term()
+            elif token.type == MINUS:
+                self.eat(MINUS)
+                result = result - self.term()
 
         return result
 
@@ -108,12 +140,14 @@ class Interpreter(object):
 def main():
     while True:
         try:
+
             text = input('calc> ')
         except EOFError:
             break
         if not text:
             continue
-        interpreter = Interpreter(text)
+        lexer = Lexer(text)
+        interpreter = Interpreter(lexer)
         result = interpreter.expr()
         print(result)
 
